@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Smart Voice Train Finder</title>
+  <style>
+    :root {
+      --bg-light: #f0f0f0;
+      --text-light: #000;
+      --bg-dark: url('https://images.smiletemplates.com/uploads/screenshots/674/0000674695/powerpoint-template-450w.jpg') no-repeat center center fixed;
+      --text-dark: #fff;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: var(--bg-dark);
+      background-size: cover;
+      color: var(--text-dark);
+      overflow-x: hidden;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    body.light-theme {
+      background: var(--bg-light);
+      color: var(--text-light);
+    }
+
+    .overlay {
+      background-color: rgba(0, 0, 0, 0.7);
+      min-height: 100vh;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      position: relative;
+    }
+
+    h1 {
+      font-size: 3rem;
+      margin-bottom: 0.5rem;
+    }
+
+    p.subtitle {
+      font-size: 1.2rem;
+      margin-bottom: 2rem;
+      font-style: italic;
+      color: #dcdcdc;
+    }
+
+    .btn {
+      background: linear-gradient(to right, #00b09b, #96c93d);
+      color: white;
+      padding: 1rem 2rem;
+      border: none;
+      border-radius: 50px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 10px rgba(255,255,255,0.4);
+    }
+
+    .loader {
+      margin-top: 2rem;
+      font-size: 1.1rem;
+      color: #ffd700;
+      font-style: italic;
+    }
+
+    .results {
+      margin-top: 2rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      justify-content: center;
+    }
+
+    .card {
+      background-color: white;
+      color: black;
+      padding: 1rem;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.4);
+      width: 300px;
+      transition: transform 0.2s;
+    }
+
+    .card:hover {
+      transform: translateY(-5px);
+    }
+
+    #statusMessage {
+      margin-top: 1rem;
+      font-size: 1.1rem;
+      color: #ccc;
+    }
+
+    .passage {
+      position: absolute;
+      font-size: 1rem;
+      font-style: italic;
+      color: #ffebcd;
+      white-space: nowrap;
+      overflow: hidden;
+      width: 100%;
+      pointer-events: none;
+    }
+
+    .left-marquee {
+      top: 10px;
+      left: 0;
+      animation: moveLeft 20s linear infinite;
+    }
+
+    .right-marquee {
+      bottom: 10px;
+      right: 0;
+      text-align: right;
+      animation: moveRight 25s linear infinite;
+    }
+
+    @keyframes moveLeft {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+
+    @keyframes moveRight {
+      0% { transform: translateX(100%); }
+      100% { transform: translateX(-100%); }
+    }
+
+    .top-controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    select {
+      padding: 0.5rem 1rem;
+      border-radius: 25px;
+      border: none;
+      font-size: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="overlay">
+    <div class="passage left-marquee">🌟 "Every station has a story, every train a destination worth dreaming of."</div>
+    <div class="passage right-marquee">🚂 "The journey is the reward — hop on and discover something new today!"</div>
+
+    <h1>🚆 Smart Voice Train Finder</h1>
+    <p class="subtitle">"Speak your route. Let the railway magic begin."</p>
+
+    <button class="btn" onclick="startListening()">🎙️ Tap & Speak Destination or Train</button>
+
+    <div style="margin-top: 1.5rem;">
+      <input type="text" id="textQuery" placeholder="Enter destination or train name..." 
+             style="padding: 0.8rem 1rem; border-radius: 25px; border: none; width: 280px; max-width: 90%; font-size: 1rem;" />
+      <button class="btn" style="margin-left: 0.5rem;" onclick="searchByText()">🔍 Search</button>
+    </div>
+
+    <div class="top-controls">
+      <div>
+        <label style="font-size: 1rem;">🌗 Theme: </label>
+        <select onchange="toggleTheme(this.value)">
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+        </select>
+      </div>
+
+      <div>
+        <label style="font-size: 1rem;">🕒 Sort by:</label>
+        <select onchange="sortResults(this.value)">
+          <option value="">None</option>
+          <option value="departure">Departure Time</option>
+          <option value="arrival">Arrival Time</option>
+        </select>
+      </div>
+
+      <div>
+        <label style="font-size: 1rem;">📜 History:</label>
+        <select id="historyDropdown" onchange="loadFromHistory(this.value)">
+          <option value="">-- Select --</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="statusMessage">Awaiting your command...</div>
+    <div class="loader" id="loader" style="display: none;">🔄 Processing your request...</div>
+    <div class="results" id="results"></div>
+  </div>
+
+  <script>
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    const history = [];
+    let currentTrains = [];
+
+    recognition.onstart = () => {
+      document.getElementById('statusMessage').textContent = "🎤 Listening...";
+    };
+
+    recognition.onerror = (event) => {
+      alert('Speech Recognition Error: ' + event.error);
+      document.getElementById('statusMessage').textContent = "❌ Error occurred. Try again.";
+    };
+
+    recognition.onresult = (event) => {
+      const voiceText = event.results[0][0].transcript;
+      document.getElementById('statusMessage').textContent = `🔍 You said: "${voiceText}"`;
+      fetchTrainData(voiceText);
+    };
+
+    function startListening() {
+      document.getElementById('statusMessage').textContent = "🎤 Listening for your command...";
+      document.getElementById('results').innerHTML = '';
+      recognition.start();
+    }
+
+    function searchByText() {
+      const query = document.getElementById('textQuery').value.trim();
+      if (!query) {
+        document.getElementById('statusMessage').textContent = "⚠️ Please enter a valid query.";
+        return;
+      }
+      document.getElementById('results').innerHTML = '';
+      document.getElementById('statusMessage').textContent = `🔍 Searching for: "${query}"`;
+      fetchTrainData(query);
+    }
+
+    function updateHistory(query) {
+      if (!history.includes(query)) {
+        history.push(query);
+        const option = document.createElement('option');
+        option.value = query;
+        option.textContent = query;
+        document.getElementById('historyDropdown').appendChild(option);
+      }
+    }
+
+    function loadFromHistory(value) {
+      if (value) {
+        document.getElementById('textQuery').value = value;
+        fetchTrainData(value);
+      }
+    }
+
+    function toggleTheme(theme) {
+      document.body.classList.toggle('light-theme', theme === 'light');
+    }
+
+    function sortResults(criteria) {
+      if (!criteria) return displayTrains(currentTrains);
+      const sorted = [...currentTrains];
+      sorted.sort((a, b) => a[`${criteria}_time`].localeCompare(b[`${criteria}_time`]));
+      displayTrains(sorted);
+    }
+
+    async function fetchTrainData(query) {
+      const loader = document.getElementById('loader');
+      const resultsContainer = document.getElementById('results');
+      loader.style.display = 'block';
+      resultsContainer.innerHTML = '';
+
+      try {
+        const response = await fetch('http://localhost:5000/api/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query })
+        });
+
+        const trains = await response.json();
+        currentTrains = trains;
+        loader.style.display = 'none';
+
+        if (!trains.length) {
+          resultsContainer.innerHTML = `<p style="color:#ffcccb;">❗ No trains found matching your input.</p>`;
+          return;
+        }
+
+        updateHistory(query);
+        displayTrains(trains);
+
+      } catch (error) {
+        loader.style.display = 'none';
+        resultsContainer.innerHTML = `<p style="color:#ffcccb;">⚠️ Failed to fetch data. Check your server.</p>`;
+        console.error(error);
+      }
+    }
+
+    function displayTrains(trains) {
+      const resultsContainer = document.getElementById('results');
+      resultsContainer.innerHTML = '';
+      trains.forEach(train => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <h3>🚆 ${train.train_name} (${train.train_no || 'N/A'})</h3>
+          <p><strong>From:</strong> ${train.source}</p>
+          <p><strong>To:</strong> ${train.destination}</p>
+          <p><strong>Departs:</strong> ${train.departure_time}</p>
+          <p><strong>Arrives:</strong> ${train.arrival_time}</p>
+        `;
+        resultsContainer.appendChild(card);
+      });
+    }
+  </script>
+</body>
+</html>
